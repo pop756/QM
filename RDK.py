@@ -83,3 +83,52 @@ def Result(model,All_features,All_labels,SPLITS=4,plot=True):
     print(f"precision : {np.mean(precision_score_res):.3f}")
     print(f"recall : {np.mean(recall_score_res):.3f}")
     print(f"f1_score : {np.mean(f1_score_res):.3f}")
+import codecs
+from SmilesPE.tokenizer import *
+
+def smile_tokenize(smile_list):
+    spe_vob= codecs.open('Practice\SPE_ChEMBL.txt')
+    spe = SPE_Tokenizer(spe_vob)
+    corpus = []
+    for i in smile_list:
+        temp = spe.tokenize(i)
+        temp = temp.strip().split(' ')
+        corpus.append(temp)
+    return corpus
+
+
+from gensim.models import Word2Vec
+from gensim.models.callbacks import CallbackAny2Vec
+def embeding_model(corpus,vector_size=250, workers=4, sg=1, compute_loss=True, epochs=500,min_count=1):
+    class callback(CallbackAny2Vec):
+        """Callback to print loss after each epoch."""
+
+        def __init__(self):
+            self.epoch = 0
+            self.loss_to_be_subed = 0
+
+        def on_epoch_end(self, model):
+            loss = model.get_latest_training_loss()
+            loss_now = loss - self.loss_to_be_subed
+            self.loss_to_be_subed = loss
+            print('Loss after epoch {}: {}'.format(self.epoch, loss_now))
+            self.epoch += 1
+
+    print("학습 중")
+    model = Word2Vec(corpus, vector_size=vector_size, workers=workers, sg=sg, compute_loss=compute_loss, epochs=epochs,min_count=min_count, callbacks=[callback()])
+    print('완료')
+    return model
+
+def string_to_vec(model,corpus,max_):
+    res = []
+    for line in corpus:
+        temp = []
+        for word in line:
+            try:
+                temp.append(model.wv[word])
+            except:
+                temp.append(np.array([0]*model.vector_size))
+        while(len(temp)<max_):
+            temp.append(np.array([0]*model.vector_size))
+        res.append(temp)
+    return res
