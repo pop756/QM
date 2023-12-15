@@ -408,14 +408,16 @@ def plot_history(models,tox_name):
 
     plt.legend()
     plt.tight_layout() 
-    plt.show()
     plt.subplot(2, 3, 6)
     for model in models.keys():
         plt.plot([i for i in range(len(model.history.history['val_auc']))],model.history.history['val_auc'],label=models[model])
     plt.title(tox_name + ' val AUC')
-    plt.xlabel
+    plt.xlabel('epoch')
+    plt.ylabel('score')
     
+    plt.savefig('./AIS_Tox_result/'+tox_name+'.png')
     
+    plt.show()
     
     
     
