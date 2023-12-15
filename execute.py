@@ -339,37 +339,62 @@ class execute():
         self.BERT.history.history['val_acc'] = val_call.history['val_acc']
         self.BERT.history.history['val_auc'] = val_call.history['val_auc']
 
+import matplotlib.pyplot as plt
 def plot_history(models,tox_name):
-    plt.figure(figsize=(16,4))
-    plt.subplot(1, 3, 1)
+    plt.figure(figsize=(16,8))
+    plt.subplot(2, 3, 1)
+    for model in models.keys():
+        plt.plot([i for i in range(len(model.history.history['loss']))],model.history.history['loss'],label=models[model])
+    #plt.plot([i for i in range(len(val_call2.history.history['val_loss']))],val_call2.history.history['val_loss'],label = 'BERT_Norm acc data')
+    plt.title(tox_name + ' train Loss')
+    plt.xlabel('epoch')
+    plt.ylabel('score')
+
+    plt.legend()
+    plt.subplot(2, 3, 2)
+    for model in models.keys():
+        plt.plot([i for i in range(len(model.history.history['acc']))],model.history.history['acc'],label=models[model])
+    #plt.plot([i for i in range(len(val_call2.history.history['val_acc']))],val_call2.history.history['val_acc'],label = 'BERT_Norm acc data')
+    plt.title(tox_name + ' train ACC')
+    plt.xlabel('epoch')
+    plt.ylabel('score')
+
+    plt.legend()
+    plt.subplot(2, 3, 3)
+    for model in models.keys():
+        plt.plot([i for i in range(len(model.history.history['auc']))],model.history.history['auc'],label=models[model])
+    plt.title(tox_name + ' train AUC')
+    plt.xlabel('epoch')
+    plt.ylabel('score')
+
+    plt.subplot(2, 3, 4)
     for model in models.keys():
         plt.plot([i for i in range(len(model.history.history['val_loss']))],model.history.history['val_loss'],label=models[model])
     #plt.plot([i for i in range(len(val_call2.history.history['val_loss']))],val_call2.history.history['val_loss'],label = 'BERT_Norm acc data')
-    plt.title(tox_name + ' Loss')
+    plt.title(tox_name + ' val Loss')
     plt.xlabel('epoch')
     plt.ylabel('score')
 
     plt.legend()
-    plt.subplot(1, 3, 2)
+    plt.subplot(2, 3, 5)
     for model in models.keys():
         plt.plot([i for i in range(len(model.history.history['val_acc']))],model.history.history['val_acc'],label=models[model])
     #plt.plot([i for i in range(len(val_call2.history.history['val_acc']))],val_call2.history.history['val_acc'],label = 'BERT_Norm acc data')
-    plt.title(tox_name + ' ACC')
+    plt.title(tox_name + ' val ACC')
     plt.xlabel('epoch')
     plt.ylabel('score')
 
-    plt.legend()
-    plt.subplot(1, 3, 3)
-    for model in models.keys():
-        plt.plot([i for i in range(len(model.history.history['val_auc']))],model.history.history['val_auc'],label=models[model])
-    plt.title(tox_name + ' AUC')
-    plt.xlabel('epoch')
+    plt.legend('epoch')
     plt.ylabel('score')
 
     plt.legend()
     plt.tight_layout() 
     plt.show()
-    
+    plt.subplot(2, 3, 6)
+    for model in models.keys():
+        plt.plot([i for i in range(len(model.history.history['val_auc']))],model.history.history['val_auc'],label=models[model])
+    plt.title(tox_name + ' val AUC')
+    plt.xlabel
     
     
     
