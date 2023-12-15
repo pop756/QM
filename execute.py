@@ -216,10 +216,29 @@ class tox_process():
         self.seed = random_state
         
         
-    def AIS_process(self,plot=False):
-        with open('./AIS_Tox_data/'+self.tox_name,'rb') as file:
-            train,label,len_20 = pickle.load(file)[0]
-            
+    def AIS_process(self,plot=False,token = 'AIS'):
+        if token == 'AIS':
+            with open('./AIS_Tox_data/'+self.tox_name,'rb') as file:
+                train,label,len_20 = pickle.load(file)[0]
+            with open('./BERT/atomInSmile/1M_random_ZINC_word2index.pkl','rb') as file:
+                word2idx = pickle.load(file)
+        elif token == 'SMILE':
+            with open('./SMILE_Tox_data/'+self.tox_name,'rb') as file:
+                train,label,len_20 = pickle.load(file)[0]
+            with open('./BERT/SMILE/1M_random_ZINC_word2index.pkl','rb') as file:
+                word2idx = pickle.load(file)
+        elif token == 'SmiletoPE':
+            with open('./SmiletoPE/'+self.tox_name,'rb') as file:
+                train,label,len_20 = pickle.load(file)[0]
+            with open('./BERT/SmiletoPE/1M_random_ZINC_word2index.pkl','rb') as file:
+                word2idx = pickle.load(file)
+        else:
+            raise
+        
+        
+        
+        
+        
         if plot:
             temp_dict = {}
 
