@@ -13,6 +13,8 @@ from difflib import SequenceMatcher
 from sklearn.model_selection import train_test_split
 from tdc.single_pred import Tox
 from Module import RDK
+
+
 class TokenAndPositionEmbedding(tf.keras.layers.Layer):
     def __init__(self, maxlen, vocab_size, embed_dim):
         super().__init__()
@@ -58,7 +60,7 @@ class BERT(tf.keras.layers.Layer):
         
         self.embedding = TokenAndPositionEmbedding(200,3500,256)
         self.dense = tf.keras.layers.Dense(250,activation = 'gelu')
-        self.classify = tf.keras.layers.Dense(732,activation = 'softmax')
+        self.classify = tf.keras.layers.Dense(71,activation = 'softmax')
     def call(self, inputs, mask_index=None,pretrain = False):
         if pretrain:
             mask_index = tf.one_hot(mask_index,200)
@@ -93,7 +95,7 @@ def predict(model,results,len_list):
     return np.array(x_val)
 
 def similar(a, b):    return SequenceMatcher(None, a, b).ratio()
-def most_similar(query):
+def most_similar(query,word2idx):
 
     max = 0
     tokken = ''
@@ -164,22 +166,18 @@ class CustomCallback(tf.keras.callbacks.Callback):
         """
         if self.epoch>10 and len(self.counts)>2:
             self.model.stop_training = True"""
-            
-            
-with open('./BERT/atomInSmile/1M_random_ZINC_word2index.pkl','rb') as file:
-    word2idx = pickle.load(file)
+
 
 
 inputs = Input(shape = (200,),dtype=tf.int32)
-mask = Input(shape = (16), dtype=tf.int32)
-outputs = BERT(256,6,1024)(inputs,mask,pretrain=True)
+outputs = BERT(256,6,1024)(inputs,None)
 
-model = Model(inputs = [inputs,mask], outputs = [outputs])
+model = Model(inputs = [inputs], outputs = [outputs])
 
-model.load_weights('./BERT/atomInSmile/F_Random_ZINC_L_model_weights.h5')
+#model.load_weights('./BERT/atomInSmile/F_Random_ZINC_L_model_weights.h5')
 
 
-BERT_parameters = model.get_weights()[:130]
+#BERT_parameters = model.get_weights()[:130]
 
 bert_layer = BERT(256,6,1024)
 
@@ -218,20 +216,21 @@ class tox_process():
         
     def AIS_process(self,plot=False,token = 'AIS'):
         if token == 'AIS':
-            with open('./AIS_Tox_data/'+self.tox_name,'rb') as file:
+            with open('./Tox_data/AIS_Tox_data/'+self.tox_name,'rb') as file:
                 train,label,len_20 = pickle.load(file)[0]
             with open('./BERT/atomInSmile/1M_random_ZINC_word2index.pkl','rb') as file:
                 word2idx = pickle.load(file)
         elif token == 'SMILE':
-            with open('./SMILE_Tox_data/'+self.tox_name,'rb') as file:
+            with open('./Tox_data/SMILE_Tox_data/'+self.tox_name,'rb') as file:
                 train,label,len_20 = pickle.load(file)[0]
             with open('./BERT/SMILE/1M_random_ZINC_word2index.pkl','rb') as file:
                 word2idx = pickle.load(file)
-        elif token == 'SmiletoPE':
-            with open('./SmiletoPE/'+self.tox_name,'rb') as file:
-                train,label,len_20 = pickle.load(file)[0]
-            with open('./BERT/SmiletoPE/1M_random_ZINC_word2index.pkl','rb') as file:
-                word2idx = pickle.load(file)
+                
+            """elif token == 'SmiletoPE':
+                with open('./Tox_data/SmiletoPE/'+self.tox_name,'rb') as file:
+                    train,label,len_20 = pickle.load(file)[0]
+                with open('./BERT/SmiletoPE/1M_random_ZINC_word2index.pkl','rb') as file:
+                    word2idx = pickle.load(file)"""
         else:
             raise
         
@@ -265,7 +264,7 @@ class tox_process():
         similar_dict = {}
 
         for i in except_dict.keys():
-            similar_dict[i] = most_similar(i)
+            similar_dict[i] = most_similar(i,word2idx)
             
             
         AIS_train = []
@@ -279,12 +278,18 @@ class tox_process():
                 try:
                     temp.append(word2idx[j])
                 except:
+                    print('Unexpected : ',j)
+                    word2idx[j] = len(word2idx)+1
+                    temp.append(word2idx[j])
+                """    
+                except:
                     if j != '/[H]':
+                        print(j,i)
                         word_sim = similar_dict[j]
                         if word_sim != '':
                             temp.append(word2idx[word_sim])
                     else:
-                        pass
+                        pass"""
             if len(temp)>1:
                 AIS_train.append(temp)
 
@@ -323,43 +328,60 @@ class tox_process():
 
    
 class execute():
-    def __init__(self,tox,test_size,split_seed,epoch = 20,batch=32*20):
+    def __init__(self,tox,test_size,split_seed,epoch = 20,batch=32*20,tokens = ['AIS']):
         super().__init__()
         self.tox = tox
         self.size = test_size
         self.seed = split_seed
         self.epoch = epoch
-        BERT_Classifier = BERT_model()
-        self.BERT = BERT_Classifier
+        self.BERTs = []
         self.batch_size = batch
         Bit_Classifier = Bit_model()
         self.Bit = Bit_Classifier
+        #model.load_weights('./BERT/atomInSmile/F_Random_ZINC_L_model_weights.h5')
+        self.tokens = tokens
+        self.BERT_parameters = []
         
-        
+        for token in tokens:
+            if token == 'AIS':
+                model.load_weights('./BERT/atomInSmile/Pre_BERT.h5')
+            elif token == 'SMILE':
+                model.load_weights('./BERT/SMILE/Pre_BERT.h5')
+            elif token == 'SmiletoPE':
+                model.load_weights('./BERT/SmiletoPE/F_Random_ZINC_L_model_weights.h5')
+            else:
+                raise
+            self.BERTs.append(BERT_model())
+            self.BERT_parameters.append(model.get_weights()[:130])
     def forward(self,set_weights=True):
         if set_weights:
-            self.BERT.layers[1].set_weights(BERT_parameters)
+            for index,token in enumerate(self.tokens):
+                BERT_parameter = self.BERT_parameters[index]
+                self.BERTs[index].layers[1].set_weights(BERT_parameter)
         
 
+        for index,token in enumerate(self.tokens): 
+            process = tox_process(self.tox, self.size, self.seed)
+            x_train, x_val, y_train, y_val,len_20 = process.AIS_process(token = token)
+            
+            temp_BERT = self.BERTs[index]
+            
+            val_call = CustomCallback(x_val,y_val,len_20)
+            
+            temp_BERT.compile(optimizer = tf.keras.optimizers.Adam(learning_rate=1e-5),loss = 'binary_crossentropy',metrics=['acc',AUC(name='auc')])
+            
+            hist1 = temp_BERT.fit(x_train,y_train,batch_size=self.batch_size,epochs=self.epoch,callbacks=[val_call])
+            
         
-        process = tox_process(self.tox, self.size, self.seed)
-        x_train, x_val, y_train, y_val,len_20 = process.AIS_process()
+            temp_BERT.history.history['val_loss'] = val_call.history['val_loss']
+            temp_BERT.history.history['val_acc'] = val_call.history['val_acc']
+            temp_BERT.history.history['val_auc'] = val_call.history['val_auc']
+            
         x_train_NN,x_val_NN,y_train_NN,y_val_NN = process.bit_precess()
-        
-        val_call = CustomCallback(x_val,y_val,len_20)
-        
-        self.BERT.compile(optimizer = tf.keras.optimizers.Adam(learning_rate=1e-5),loss = 'binary_crossentropy',metrics=['acc',AUC(name='auc')])
         self.Bit.compile(optimizer = 'Adam',loss = 'binary_crossentropy',metrics=['acc',AUC(name='auc')])
-        
-        hist1 = self.BERT.fit(x_train,y_train,batch_size=self.batch_size,epochs=self.epoch,callbacks=[val_call])
         hist2 = self.Bit.fit(x_train_NN,y_train_NN,batch_size=32,epochs=self.epoch,validation_data=(x_val_NN,y_val_NN))
-    
-        self.BERT.history.history['val_loss'] = val_call.history['val_loss']
-        self.BERT.history.history['val_acc'] = val_call.history['val_acc']
-        self.BERT.history.history['val_auc'] = val_call.history['val_auc']
-
 import matplotlib.pyplot as plt
-def plot_history(models,tox_name):
+def plot_history(models,tox_name,token=['AIS']):
     plt.figure(figsize=(16,8))
     plt.subplot(2, 3, 1)
     for model in models.keys():
@@ -415,7 +437,7 @@ def plot_history(models,tox_name):
     plt.xlabel('epoch')
     plt.ylabel('score')
     
-    plt.savefig('./AIS_Tox_result/'+tox_name+'.png')
+    plt.savefig(f'./Results/{token[0]}_{token[1]}_Tox_result/'+tox_name+'.png')
     
     plt.show()
     

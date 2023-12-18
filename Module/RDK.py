@@ -86,7 +86,7 @@ def Result(model,All_features,All_labels,SPLITS=4,plot=True):
 import codecs
 from SmilesPE.tokenizer import *
 from tqdm import tqdm
-spe_vob= codecs.open('Practice/SPE_ChEMBL.txt')
+spe_vob= codecs.open('./Module/SPE_ChEMBL.txt')
 spe = SPE_Tokenizer(spe_vob)
 def smile_tokenize(smile_list):
     corpus = []
