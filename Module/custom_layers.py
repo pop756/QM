@@ -6,47 +6,56 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras import layers
 import tensorflow as tf
 
-
+import copy
 import tensorflow as tf
 import tensornetwork as tn
 import numpy as np
 import tensornetwork as tn
 class TNLayer(tf.keras.layers.Layer):
-    def __init__(self,Tensor_dimention = 20):
+    def __init__(self,Tensor_dimention = 2):
         super(TNLayer, self).__init__()
         # Create the variables for the layer.
         
 
-        self.A1 = tf.Variable(tf.random.normal(shape=[4,Tensor_dimention,4], stddev=1.0/192.0), trainable=True)
-        self.A2 = tf.Variable(tf.random.normal(shape=[4,Tensor_dimention,Tensor_dimention,4], stddev=1.0/192.0), trainable=True)
-        self.A3 = tf.Variable(tf.random.normal(shape=[4,Tensor_dimention,Tensor_dimention,4], stddev=1.0/192.0), trainable=True)
-        self.A4 = tf.Variable(tf.random.normal(shape=[4,Tensor_dimention,3], stddev=1.0/192.0), trainable=True)
+        self.A1 = tf.Variable(tf.random.normal(shape=[4,Tensor_dimention,8], stddev=1.0/(256*4.0)),name="a1", trainable=True)
+        self.A2 = tf.Variable(tf.random.normal(shape=[4,Tensor_dimention,Tensor_dimention,4], stddev=1.0/(256*4.0)),name="a2", trainable=True)
+        self.A3 = tf.Variable(tf.random.normal(shape=[4,Tensor_dimention,Tensor_dimention,4], stddev=1.0/(256*4.0)),name="a3", trainable=True)
+        self.A4 = tf.Variable(tf.random.normal(shape=[4,Tensor_dimention,8], stddev=1.0/(256*4.0)),name="a4", trainable=True)
         
-
-        self.bias = tf.Variable(tf.zeros(shape=(192)), trainable=True)
-        
-    def call(self, inputs):
-        # Define the contraction.
-        # We break it out so we can parallelize a batch using
-        # tf.vectorized_map (see below).
         Nodes = [tn.Node(self.A1,'a0',backend="tensorflow")]
         Nodes+=[tn.Node(self.A2,f'a{1}',backend="tensorflow")]
         Nodes+=[tn.Node(self.A3,f'a{2}',backend="tensorflow")]
         Nodes+=[tn.Node(self.A4,f'a{3}',backend="tensorflow")]
-        bias_var = self.bias
-        input_vec = tf.reshape(inputs, [-1,200,4,4,4,4])
-        T_node = tn.Node(input_vec, backend="tensorflow",name = 't')
+        T_node = tn.Node(tf.random.normal([32,200,4,4,4,4]), backend="tensorflow",name = 't')
         for i in range(len(Nodes)-1):
             if i == 0:
                 Nodes[i][1]^Nodes[i+1][1]
             else:
                 Nodes[i][2]^Nodes[i+1][1]
         for i in range(len(Nodes)):
-            Nodes[i][0]^T_node[i+2]    
+            Nodes[i][0]^T_node[i+2]  
+        Nodes += [T_node]
+        self.Nodes = Nodes
+
+        self.bias = tf.Variable(tf.zeros(shape=(256*4)), name="bias", trainable=True)
+        
+    def call(self, inputs):
+        # Define the contraction.
+        # We break it out so we can parallelize a batch using
+        # tf.vectorized_map (see below).
+        Nodes = copy.deepcopy(self.Nodes)
+        T_node = Nodes[-1]
+        Nodes[0].tensor = self.A1
+        Nodes[1].tensor = self.A2
+        Nodes[2].tensor = self.A3
+        Nodes[3].tensor = self.A4
+        bias_var = self.bias
+        input_vec = tf.reshape(inputs, [-1,200,4,4,4,4])
+        T_node.tensor = input_vec    
         contraction = T_node@Nodes[0]
-        for i in range(1,len(Nodes)):
+        for i in range(1,len(Nodes)-1):
             contraction = contraction@Nodes[i]
-        result = tf.reshape(contraction.tensor,[-1,200,192])
+        result = tf.reshape(contraction.tensor,[-1,200,256*4])
         result = result + bias_var
         return result
 
@@ -79,7 +88,7 @@ class TransformerBlock(tf.keras.layers.Layer):
     def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
         super().__init__()
         l2_reg = tf.keras.regularizers.l2(0.01)
-        self.att = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim//num_heads,kernel_regularizer=l2_reg,dropout=0.1)
+        self.att = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim,kernel_regularizer=l2_reg,dropout=0.1)
         self.ffn = tf.keras.Sequential(
             [tf.keras.layers.Dense(ff_dim, activation="relu"), tf.keras.layers.Dense(embed_dim),]
         )
@@ -97,7 +106,7 @@ class TransformerBlock(tf.keras.layers.Layer):
         return self.layernorm2(out1 + ffn_output)
     
 class TransformerBlock_Tensor(tf.keras.layers.Layer):
-    def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1,Tensor_dimention=20):
+    def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1,Tensor_dimention=2):
         super().__init__()
         self.att = MultiheadAttention_tensor(d_model=embed_dim,num_heads=num_heads,Tensor_dimention=Tensor_dimention)
         self.ffn = tf.keras.Sequential(
@@ -117,20 +126,22 @@ class TransformerBlock_Tensor(tf.keras.layers.Layer):
         return self.layernorm2(out1 + ffn_output)
 import tensorflow as tf
 
+import tensorflow as tf
+
 class MultiheadAttention_tensor(tf.keras.layers.Layer):
-    def __init__(self, d_model, num_heads,classical_rate = 0.25,Tensor_dimention = 20):
+    def __init__(self, d_model, num_heads,classical_rate = 1/3,Tensor_dimention = 2):
         super(MultiheadAttention_tensor, self).__init__()
-        assert d_model % num_heads == 0
+        #assert d_model % num_heads == 0
         self.num_heads = num_heads
-        self.depth = d_model // num_heads
+        self.depth = d_model
         self.rate = classical_rate
         assert int(num_heads/classical_rate) == num_heads/classical_rate
 
 
-        self.d_model = d_model
-        self.wq = tf.keras.layers.Dense(int(d_model*classical_rate))
-        self.wk = tf.keras.layers.Dense(int(d_model*classical_rate))
-        self.wv = tf.keras.layers.Dense(int(d_model*classical_rate))
+
+        self.wq = tf.keras.layers.Dense(int(d_model)*int(num_heads*classical_rate))
+        self.wk = tf.keras.layers.Dense(int(d_model)*int(num_heads*classical_rate))
+        self.wv = tf.keras.layers.Dense(int(d_model)*int(num_heads*classical_rate))
 
         self.wq_tensor = TNLayer(Tensor_dimention)
         self.wk_tensor = TNLayer(Tensor_dimention)
@@ -144,15 +155,13 @@ class MultiheadAttention_tensor(tf.keras.layers.Layer):
     def split_heads_tensor(self, x, batch_size):
         x = tf.reshape(x, (batch_size, -1, int(self.num_heads*(1-self.rate)), self.depth))
         return tf.transpose(x, perm=[0, 2, 1, 3])
-    def call(self, q, mask=None):
+    def call(self, q, mask):
         batch_size = tf.shape(q)[0]
         k = q
         v = q
         q_class = self.split_heads(self.wq(q), batch_size)
         k_class = self.split_heads(self.wk(k), batch_size)
         v_class = self.split_heads(self.wv(v), batch_size)
-        
-        
         q_tensor = self.split_heads_tensor(self.wq_tensor(q),batch_size)
         k_tensor = self.split_heads_tensor(self.wk_tensor(k),batch_size)
         v_tensor = self.split_heads_tensor(self.wv_tensor(v),batch_size)
@@ -161,7 +170,7 @@ class MultiheadAttention_tensor(tf.keras.layers.Layer):
         scaled_attention, attention_weights = self.scaled_dot_product_attention(q, k, v, mask)
 
         scaled_attention = tf.transpose(scaled_attention, perm=[0, 2, 1, 3])
-        concat_attention = tf.reshape(scaled_attention, (batch_size, -1, self.d_model))
+        concat_attention = tf.reshape(scaled_attention, (batch_size, -1, self.depth*self.num_heads))
 
         output = self.dense(concat_attention)
         return output, attention_weights
@@ -177,6 +186,7 @@ class MultiheadAttention_tensor(tf.keras.layers.Layer):
         attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)
         output = tf.matmul(attention_weights, v)
         return output, attention_weights
+
     
     
 def Attention_mask(embedding_mask):
@@ -188,14 +198,13 @@ def Attention_mask(embedding_mask):
     return embedding_mask
 
 class BERT_tensor(tf.keras.layers.Layer):
-    def __init__(self,emb_dim,num_heads,ff_dim,CL_num = 3,Tensor_dimention=20):
+    def __init__(self,emb_dim,num_heads,ff_dim,CL_num = 3):
         super(BERT_tensor, self).__init__()
-        #self.encoder = tf.keras.Sequential([TransformerBlock(emb_dim,num_heads,ff_dim) for i in range(8)])
-        self.encoder = TransformerBlock_Tensor(emb_dim,num_heads,ff_dim,Tensor_dimention=Tensor_dimention)
+        self.encoder = [TransformerBlock_Tensor(emb_dim,num_heads,ff_dim) for i in range(8)]
+        #self.encoder = TransformerBlock_Tensor(emb_dim,num_heads,ff_dim)
         self.embedding = TokenAndPositionEmbedding_mask(200,3500,256)
-        self.dense = layers.Dense(250,activation = 'gelu')
         self.classify = layers.Dense(CL_num,activation = 'softmax')
-    def call(self, inputs, mask_index,pretrain = False):
+    def call(self, inputs, mask_index=None,pretrain = False,att_mask = None):
         if pretrain:
             mask_index = tf.one_hot(mask_index,200)
             boolean_mask = tf.cast(tf.reduce_sum(mask_index,axis=1),bool)
@@ -203,13 +212,13 @@ class BERT_tensor(tf.keras.layers.Layer):
             
         hidden,pad_mask = self.embedding(inputs)
         Att_mask = Attention_mask(pad_mask)
+        if att_mask is not None:
+            tf.multiply(Att_mask,att_mask)
         for i in range(8):
-            hidden = self.encoder(hidden,Att_mask)
+            hidden = self.encoder[i](hidden,Att_mask)
     
         if pretrain:
             output = tf.reshape(hidden,[-1,200,256])
-            output = self.dense(output)
-            output = layers.Dropout(0.1)(output)
             output = self.classify(output)
             output = tf.boolean_mask(output,boolean_mask)
             return output
@@ -217,9 +226,9 @@ class BERT_tensor(tf.keras.layers.Layer):
             return hidden
         
 class BERT(tf.keras.layers.Layer):
-    def __init__(self,emb_dim,num_heads,ff_dim,CL_num = 3):
+    def __init__(self,emb_dim,num_heads,ff_dim,CL_num = 3,Tensor_dimention = 2):
         super(BERT, self).__init__()
-        self.encoder = tf.keras.Sequential([TransformerBlock(emb_dim,num_heads,ff_dim) for i in range(8)])
+        self.encoder = tf.keras.Sequential([TransformerBlock(emb_dim,num_heads,ff_dim,Tensor_dimention=Tensor_dimention) for i in range(8)])
         #self.encoder = TransformerBlock(emb_dim,num_heads,ff_dim)
         self.embedding = TokenAndPositionEmbedding(200,3500,256)
         self.dense = layers.Dense(250,activation = 'gelu')
@@ -236,8 +245,6 @@ class BERT(tf.keras.layers.Layer):
     
         if pretrain:
             output = tf.reshape(hidden,[-1,200,256])
-            output = self.dense(output)
-            output = layers.Dropout(0.1)(output)
             output = self.classify(output)
             output = tf.boolean_mask(output,boolean_mask)
             return output
