@@ -214,7 +214,7 @@ class tox_process():
         self.seed = random_state
         
         
-    def AIS_process(self,plot=False,token = 'AIS'):
+    def AIS_process(self,plot=False,token = 'AIS',number_of_task = 2):
         if token == 'AIS':
             with open('./Tox_data/AIS_Tox_data/'+self.tox_name,'rb') as file:
                 train,label,len_20 = pickle.load(file)[0]
@@ -270,9 +270,18 @@ class tox_process():
         AIS_train = []
         for index,i in enumerate(train):
             
+            
+            if len(i)>180:
+                continue
+            
+            
             temp = []
-            temp.append(3)
-            temp.append(4)
+            if number_of_task == 2:
+                temp.append(3)
+                temp.append(4)
+            else:
+                for i in range(number_of_task):
+                    temp.append(len(word2idx)+1+i)
             temp.append(1)
             for j in i:
                 try:

@@ -155,7 +155,7 @@ class execute():
             if token == 'AIS':
                 model.load_weights('./BERT/atomInSmile/small_tensor_Pre_BERT')
             elif token == 'SMILE':
-                model.load_weights('./BERT/SMILE/tensor_Pre_BERT.h5')
+                model.load_weights('./BERT/SMILE/small_tensor_Pre_BERT')
             else:
                 raise
             self.BERTs.append(BERT_model())

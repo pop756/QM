@@ -61,11 +61,12 @@ class TNLayer(tf.keras.layers.Layer):
 
 
 class TokenAndPositionEmbedding_mask(tf.keras.layers.Layer):
-    def __init__(self, maxlen, vocab_size, embed_dim,mask=False):
+    def __init__(self, maxlen, vocab_size, embed_dim,start_index = 0):
         super().__init__()
         self.token_emb = tf.keras.layers.Embedding(input_dim=vocab_size, output_dim=embed_dim,mask_zero=True)
         self.pos_emb = tf.keras.layers.Embedding(input_dim=maxlen, output_dim=embed_dim,mask_zero = True)
-        self.positions = tf.range(start=1, limit=maxlen+1, delta=1)
+        
+        self.positions = np.array([0]*start_index+[i+1 for i in range(200-start_index)])
     def call(self, x):
         positions = self.pos_emb(self.positions)
         mask = self.token_emb.compute_mask(x)
@@ -73,11 +74,11 @@ class TokenAndPositionEmbedding_mask(tf.keras.layers.Layer):
         return x + positions,mask
 
 class TokenAndPositionEmbedding(tf.keras.layers.Layer):
-    def __init__(self, maxlen, vocab_size, embed_dim,mask=False):
+    def __init__(self, maxlen, vocab_size, embed_dim,start_index = 0):
         super().__init__()
         self.token_emb = tf.keras.layers.Embedding(input_dim=vocab_size, output_dim=embed_dim,mask_zero=True)
         self.pos_emb = tf.keras.layers.Embedding(input_dim=maxlen, output_dim=embed_dim,mask_zero = True)
-        self.positions = tf.range(start=1, limit=maxlen+1, delta=1)
+        self.positions = np.array([0]*start_index+[i+1 for i in range(200-start_index)])
     def call(self, x):
         positions = self.pos_emb(self.positions)
         x = self.token_emb(x)
@@ -198,11 +199,11 @@ def Attention_mask(embedding_mask):
     return embedding_mask
 
 class BERT_tensor(tf.keras.layers.Layer):
-    def __init__(self,emb_dim,num_heads,ff_dim,CL_num = 3):
+    def __init__(self,emb_dim,num_heads,ff_dim,CL_num = 3,strat_index = 1):
         super(BERT_tensor, self).__init__()
         self.encoder = [TransformerBlock_Tensor(emb_dim,num_heads,ff_dim) for i in range(8)]
         #self.encoder = TransformerBlock_Tensor(emb_dim,num_heads,ff_dim)
-        self.embedding = TokenAndPositionEmbedding_mask(200,3500,256)
+        self.embedding = TokenAndPositionEmbedding_mask(200,3500,256,start_index=strat_index)
         self.classify = layers.Dense(CL_num,activation = 'softmax')
     def call(self, inputs, mask_index=None,pretrain = False,att_mask = None):
         if pretrain:
@@ -213,7 +214,8 @@ class BERT_tensor(tf.keras.layers.Layer):
         hidden,pad_mask = self.embedding(inputs)
         Att_mask = Attention_mask(pad_mask)
         if att_mask is not None:
-            tf.multiply(Att_mask,att_mask)
+            Att_mask = (Att_mask+att_mask)%2
+        
         for i in range(8):
             hidden = self.encoder[i](hidden,Att_mask)
     
