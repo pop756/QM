@@ -268,12 +268,18 @@ class tox_process():
             
             
         AIS_train = []
+        temp_label = []
+        temp_index = 0
+        sign = len_20[0]
+        remove_temp = []
         for index,i in enumerate(train):
             
-            
+            if index > sign:
+                sign+= len_20[temp_index]
+                temp_index+=1
             if len(i)>180:
+                remove_temp.append(temp_index)
                 continue
-            
             
             temp = []
             if number_of_task == 2:
@@ -301,6 +307,11 @@ class tox_process():
                         pass"""
             if len(temp)>1:
                 AIS_train.append(temp)
+                temp_label.append(label[index])
+                
+        for j in remove_temp:
+            len_20[j] = len_20[j]-1
+        label = np.array(temp_label)
 
         AIS_train = tf.keras.preprocessing.sequence.pad_sequences(AIS_train, padding='post', maxlen=200)
         temp_x = []

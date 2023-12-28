@@ -153,7 +153,7 @@ class execute():
         
         for token in tokens:
             if token == 'AIS':
-                model.load_weights('./BERT/atomInSmile/small_tensor_Pre_BERT')
+                model.load_weights('./BERT/atomInSmile/Pre_BERT')
             elif token == 'SMILE':
                 model.load_weights('./BERT/SMILE/small_tensor_Pre_BERT')
             else:
