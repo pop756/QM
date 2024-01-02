@@ -105,7 +105,7 @@ class TransformerBlock(tf.keras.layers.Layer):
 class TransformerBlock_Tensor(tf.keras.layers.Layer):
     def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1,Tensor_dimention=2):
         super().__init__()
-        self.att = MultiheadAttention_tensor(d_model=embed_dim,num_heads=num_heads,Tensor_dimention=Tensor_dimention)
+        self.att = MultiheadAttention_tensor(d_model=embed_dim,num_heads=num_heads,Tensor_dimention=Tensor_dimention,dropout=0)
         self.ffn = tf.keras.Sequential(
             [tf.keras.layers.Dense(ff_dim, activation="relu"), tf.keras.layers.Dense(embed_dim),]
         )
@@ -126,7 +126,7 @@ import tensorflow as tf
 import tensorflow as tf
 
 class MultiheadAttention_tensor(tf.keras.layers.Layer):
-    def __init__(self, d_model, num_heads,classical_rate = 1/3,Tensor_dimention = 2):
+    def __init__(self, d_model, num_heads,classical_rate = 1/3,Tensor_dimention = 2,dropout=0):
         super(MultiheadAttention_tensor, self).__init__()
         #assert d_model % num_heads == 0
         self.num_heads = num_heads
@@ -139,7 +139,7 @@ class MultiheadAttention_tensor(tf.keras.layers.Layer):
         self.wq = tf.keras.layers.Dense(int(d_model)*int(num_heads*classical_rate))
         self.wk = tf.keras.layers.Dense(int(d_model)*int(num_heads*classical_rate))
         self.wv = tf.keras.layers.Dense(int(d_model)*int(num_heads*classical_rate))
-        
+        self.dropout = dropout
         self.wq_tensor = TNLayer(Tensor_dimention)
         self.wk_tensor = TNLayer(Tensor_dimention)
         self.wv_tensor = TNLayer(Tensor_dimention)
@@ -147,6 +147,7 @@ class MultiheadAttention_tensor(tf.keras.layers.Layer):
         self.dense = tf.keras.layers.Dense(d_model,kernel_initializer='lecun_normal')
 
     def split_heads(self, x, batch_size):
+        print
         x = tf.reshape(x, (batch_size, -1, int(self.num_heads*self.rate), self.depth))
         return tf.transpose(x, perm=[0, 2, 1, 3])
     def split_heads_tensor(self, x, batch_size):
@@ -156,12 +157,24 @@ class MultiheadAttention_tensor(tf.keras.layers.Layer):
         batch_size = tf.shape(q)[0]
         k = q
         v = q
+        
         q_class = self.split_heads(self.wq(q), batch_size)
+
+        
         k_class = self.split_heads(self.wk(k), batch_size)
+
+        
         v_class = self.split_heads(self.wv(v), batch_size)
+        
+        
         q_tensor = self.split_heads_tensor(self.wq_tensor(q),batch_size)
+
+        
         k_tensor = self.split_heads_tensor(self.wk_tensor(k),batch_size)
+
+        
         v_tensor = self.split_heads_tensor(self.wv_tensor(v),batch_size)
+
         q,k,v = tf.concat([q_class,q_tensor],axis=1),tf.concat([k_class,k_tensor],axis=1),tf.concat([v_class,v_tensor],axis=1)
 
         scaled_attention, attention_weights = self.scaled_dot_product_attention(q, k, v, mask)
@@ -181,6 +194,7 @@ class MultiheadAttention_tensor(tf.keras.layers.Layer):
             scaled_attention_logits += (mask * -1e9)
         scaled_attention_logits = tf.transpose(scaled_attention_logits,perm=[1,0,2,3])
         attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)
+        attention_weights = tf.keras.layers.Dropout(self.dropout)(attention_weights)
         output = tf.matmul(attention_weights, v)
         return output, attention_weights
 

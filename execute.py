@@ -217,12 +217,12 @@ class tox_process():
     def AIS_process(self,plot=False,token = 'AIS',number_of_task = 2):
         if token == 'AIS':
             with open('./Tox_data/AIS_Tox_data/'+self.tox_name,'rb') as file:
-                train,label,len_20 = pickle.load(file)[0]
+                corpus = pickle.load(file)[0]
             with open('./BERT/atomInSmile/1M_random_ZINC_word2index.pkl','rb') as file:
                 word2idx = pickle.load(file)
         elif token == 'SMILE':
             with open('./Tox_data/SMILE_Tox_data/'+self.tox_name,'rb') as file:
-                train,label,len_20 = pickle.load(file)[0]
+                corpus = pickle.load(file)[0]
             with open('./BERT/SMILE/1M_random_ZINC_word2index.pkl','rb') as file:
                 word2idx = pickle.load(file)
                 
@@ -234,23 +234,26 @@ class tox_process():
         else:
             raise
         
-        
-        
-        
-        
         if plot:
-            temp_dict = {}
-
-            for i in train:
-                try:
-                    temp_dict[len(i)] = temp_dict[len(i)] + 1
-                except:
-                    temp_dict[len(i)] = 1
-                    
-            plt.bar(temp_dict.keys(),temp_dict.values())
+            self.plot(corpus[0])
         
-        except_dict = {}
+        return self.train_val_split(corpus,word2idx,number_of_task)
+        
+        
+    def plot(train):
+        temp_dict = {}
 
+        for i in train:
+            try:
+                temp_dict[len(i)] = temp_dict[len(i)] + 1
+            except:
+                temp_dict[len(i)] = 1
+                
+        plt.bar(temp_dict.keys(),temp_dict.values())
+        
+    def train_val_split(self,corpus,word2idx,number_of_task,**kwargs):
+        train,label,len_20 = corpus[0],corpus[1],corpus[2]
+        except_dict = {}
         for i in train:
             for j in i:
                 try:
@@ -261,33 +264,21 @@ class tox_process():
                     except:
                         except_dict[j] = len(except_dict) + 1
         
-        similar_dict = {}
 
-        for i in except_dict.keys():
-            similar_dict[i] = most_similar(i,word2idx)
             
             
         AIS_train = []
         temp_label = []
-        temp_index = 0
-        sign = len_20[0]
         remove_temp = []
         for index,i in enumerate(train):
-            
-            if index > sign:
-                sign+= len_20[temp_index]
-                temp_index+=1
-            if len(i)>180:
-                remove_temp.append(temp_index)
-                continue
             
             temp = []
             if number_of_task == 2:
                 temp.append(3)
                 temp.append(4)
             else:
-                for i in range(number_of_task):
-                    temp.append(len(word2idx)+1+i)
+                for k in range(number_of_task):
+                    temp.append(len(word2idx)+15+k)
             temp.append(1)
             for j in i:
                 try:
@@ -311,6 +302,9 @@ class tox_process():
                 
         for j in remove_temp:
             len_20[j] = len_20[j]-1
+        return self.seq2split(AIS_train,temp_label,len_20)
+            
+    def seq2split(self,AIS_train,temp_label,len_20,val_test_split = False):
         label = np.array(temp_label)
 
         AIS_train = tf.keras.preprocessing.sequence.pad_sequences(AIS_train, padding='post', maxlen=200)
@@ -323,20 +317,34 @@ class tox_process():
             index = index+i
 
 
-
-        x_train, x_val, y_train, y_val,_,len_20 = train_test_split(temp_x,temp_y,len_20, test_size=self.size,random_state=self.seed)
-        
-        def flatten(data):
-            temp = []
-            for i in data:
-                temp+=list(i)
-            data = np.array(temp)
-            return data
-        x_train = flatten(x_train)
-        x_val = flatten(x_val)
-        y_val = flatten(y_val)
-        y_train = flatten(y_train)
-        return x_train, x_val, y_train, y_val,len_20
+        if val_test_split:
+            x_train, x_val, y_train, y_val,len_20_train,len_20 = train_test_split(temp_x,temp_y,len_20, test_size=self.size,random_state=self.seed)
+            def flatten(data):
+                temp = []
+                for i in data:
+                    temp+=list(i)
+                data = np.array(temp)
+                return data
+            x_train = flatten(x_train)
+            x_val = flatten(x_val)
+            y_val = flatten(y_val)
+            y_train = flatten(y_train)
+            return x_train, x_val, y_train, y_val,len_20_train,len_20
+            
+        else:
+            x_train, x_val, y_train, y_val,_,len_20 = train_test_split(temp_x,temp_y,len_20, test_size=self.size,random_state=self.seed)
+            
+            def flatten(data):
+                temp = []
+                for i in data:
+                    temp+=list(i)
+                data = np.array(temp)
+                return data
+            x_train = flatten(x_train)
+            x_val = flatten(x_val)
+            y_val = flatten(y_val)
+            y_train = flatten(y_train)
+            return x_train, x_val, y_train, y_val,len_20
     
     def bit_precess(self):
         train,tox_info = Tox(name=self.tox_name).get_data(format='DeepPurpose')

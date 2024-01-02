@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from tdc.single_pred import Tox
 from Module import RDK
 from Module import custom_layers
-
+from Module.custom_layers import Attention_mask
 
 def predict(model,results,len_list):
     index = 0
@@ -111,24 +111,36 @@ model = Model(inputs = [inputs], outputs = [outputs])
 
 from tensorflow.keras.layers import Input
 from tensorflow.keras import Model
-
-def BERT_model():
-    bert_layer = custom_layers.BERT_tensor(256,6,1024)
+def Task_mask(num_task):
+    result = np.zeros([200,200])
+    for i in range(num_task):
+        for j in range(200):
+            if j == i:
+                continue
+            else:
+                result[j][i] = 1
+    return result
+def BERT_model(number_of_task):
+    if number_of_task == 0:
+        mask = Task_mask(number_of_task+1)
+    else:
+        mask = Task_mask(number_of_task)
+    bert_layer = custom_layers.BERT_tensor(256,6,1024,strat_index=number_of_task)
     inputs = Input(200,)
-    hidden = bert_layer(inputs)
+    hidden = bert_layer(inputs,att_mask = mask)
     hidden = hidden[:,0]
-    hidden = tf.keras.layers.Dense(256,activation = 'gelu')(hidden)
+    hidden = tf.keras.layers.Dropout(0.3)(hidden)
     output = tf.keras.layers.Dense(1,activation = 'sigmoid')(hidden)
     result = Model(inputs = [inputs],outputs = [output])
     return result
-
+from tensorflow.keras.regularizers import l2
 def Bit_model():
     inputs = Input(2048,)
-    hidden = tf.keras.layers.Dense(250,activation = 'relu')(inputs)
+    hidden = tf.keras.layers.Dense(250,activation = 'relu',kernel_regularizer=l2(0.001))(inputs)
     hidden = tf.keras.layers.Dropout(0.3)(hidden)
-    hidden = tf.keras.layers.Dense(40,activation = 'relu')(hidden)
+    hidden = tf.keras.layers.Dense(40,activation = 'relu',kernel_regularizer=l2(0.001))(hidden)
     hidden = tf.keras.layers.Dropout(0.3)(hidden)
-    hidden = tf.keras.layers.Dense(10,activation = 'relu')(hidden)
+    hidden = tf.keras.layers.Dense(10,activation = 'relu',kernel_regularizer=l2(0.001))(hidden)
     hidden = tf.keras.layers.Dropout(0.3)(hidden)
     output = tf.keras.layers.Dense(1,activation = 'sigmoid')(hidden)
     result = Model(inputs = [inputs],outputs = [output])
@@ -136,10 +148,11 @@ def Bit_model():
 
 from execute import tox_process
 
+
+
 class execute():
-    def __init__(self,tox,test_size,split_seed,epoch = 20,batch=32*20,tokens = ['AIS'],att_mask = None):
+    def __init__(self,test_size,split_seed,epoch = 20,batch=32*20,tokens = ['AIS'],number_of_task=0):
         super().__init__()
-        self.tox = tox
         self.size = test_size
         self.seed = split_seed
         self.epoch = epoch
@@ -150,26 +163,28 @@ class execute():
         #model.load_weights('./BERT/atomInSmile/F_Random_ZINC_L_model_weights.h5')
         self.tokens = tokens
         self.BERT_parameters = []
-        
+        self.task_num = number_of_task
         for token in tokens:
             if token == 'AIS':
                 model.load_weights('./BERT/atomInSmile/Pre_BERT')
             elif token == 'SMILE':
-                model.load_weights('./BERT/SMILE/small_tensor_Pre_BERT')
+                with open('./BERT/SMILE/Pre_BERT.pkl','rb') as file:
+                    paras = pickle.load(file)
+                    model.set_weights(paras)
             else:
                 raise
-            self.BERTs.append(BERT_model())
+            self.BERTs.append(BERT_model(number_of_task=self.task_num))
             self.BERT_parameters.append(model.get_weights())
-    def forward(self,set_weights=True):
+    def forward(self,corpus,word2idx,set_weights=True):
         if set_weights:
-            for index,token in enumerate(self.tokens):
+            for index,_ in enumerate(self.tokens):
                 BERT_parameter = self.BERT_parameters[index]
                 self.BERTs[index].layers[1].set_weights(BERT_parameter)
         
 
-        for index,token in enumerate(self.tokens): 
-            process = tox_process(self.tox, self.size, self.seed)
-            x_train, x_val, y_train, y_val,len_20 = process.AIS_process(token = token)
+        for index,_ in enumerate(self.tokens): 
+            process = tox_process('Split', self.size, self.seed)
+            x_train, x_val, y_train, y_val,len_20 = process.train_val_split(corpus,word2idx,self.task_num)
             
             temp_BERT = self.BERTs[index]
             
@@ -183,10 +198,11 @@ class execute():
             temp_BERT.history.history['val_loss'] = val_call.history['val_loss']
             temp_BERT.history.history['val_acc'] = val_call.history['val_acc']
             temp_BERT.history.history['val_auc'] = val_call.history['val_auc']
-            
-        x_train_NN,x_val_NN,y_train_NN,y_val_NN = process.bit_precess()
+    def bit_forward(self,corpus):
+        x_train_NN,x_val_NN,y_train_NN,y_val_NN = corpus[0],corpus[1],corpus[2],corpus[3]
         self.Bit.compile(optimizer = 'Adam',loss = 'binary_crossentropy',metrics=['acc',AUC(name='auc')])
         hist2 = self.Bit.fit(x_train_NN,y_train_NN,batch_size=32,epochs=self.epoch,validation_data=(x_val_NN,y_val_NN))
+
         
 import matplotlib.pyplot as plt
 def plot_history(models,tox_name,token=['AIS']):
