@@ -104,6 +104,11 @@ outputs = custom_layers.BERT_tensor(256,6,1024,732)(inputs,None)
 
 model = Model(inputs = [inputs], outputs = [outputs])
 
+
+inputs = Input(shape = (200,),dtype=tf.int32)
+outputs = custom_layers.BERT_tensor_small(256,8,1024,732)(inputs,None)
+
+model_small = Model(inputs = [inputs], outputs = [outputs])
 #model.load_weights('./BERT/atomInSmile/F_Random_ZINC_L_model_weights.h5')
 
 
@@ -126,6 +131,20 @@ def BERT_model(number_of_task):
     else:
         mask = Task_mask(number_of_task)
     bert_layer = custom_layers.BERT_tensor(256,6,1024,strat_index=number_of_task)
+    inputs = Input(200,)
+    hidden = bert_layer(inputs,att_mask = mask)
+    hidden = hidden[:,0]
+    hidden = tf.keras.layers.Dropout(0.3)(hidden)
+    output = tf.keras.layers.Dense(1,activation = 'sigmoid')(hidden)
+    result = Model(inputs = [inputs],outputs = [output])
+    return result
+
+def BERT_model_small(number_of_task):
+    if number_of_task == 0:
+        mask = Task_mask(number_of_task+1)
+    else:
+        mask = Task_mask(number_of_task)
+    bert_layer = custom_layers.BERT_tensor_small(256,8,1024,strat_index=number_of_task)
     inputs = Input(200,)
     hidden = bert_layer(inputs,att_mask = mask)
     hidden = hidden[:,0]
@@ -167,14 +186,22 @@ class execute():
         for token in tokens:
             if token == 'AIS':
                 model.load_weights('./BERT/atomInSmile/Pre_BERT')
+                self.BERTs.append(BERT_model(number_of_task=self.task_num))
+                self.BERT_parameters.append(model.get_weights())
             elif token == 'SMILE':
                 with open('./BERT/SMILE/Pre_BERT.pkl','rb') as file:
                     paras = pickle.load(file)
                     model.set_weights(paras)
+                    self.BERTs.append(BERT_model(number_of_task=self.task_num))
+                    self.BERT_parameters.append(model.get_weights())
+            elif token == 'SMILE_small':
+                with open('./BERT/SMILE/small_Pre_BERT.pkl','rb') as file:
+                    paras = pickle.load(file)
+                    model_small.set_weights(paras)
+                    self.BERTs.append(BERT_model_small(number_of_task=self.task_num))
+                    self.BERT_parameters.append(model_small.get_weights())
             else:
                 raise
-            self.BERTs.append(BERT_model(number_of_task=self.task_num))
-            self.BERT_parameters.append(model.get_weights())
     def forward(self,corpus,word2idx,set_weights=True):
         if set_weights:
             for index,_ in enumerate(self.tokens):
